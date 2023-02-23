@@ -1,59 +1,58 @@
-from queue import PriorityQueue
+import heapq
 
-# Define the successor function
-def successors(x, y, z, state):
-    (a, b, c) = state
-    return [(x, b, c), (a, y, c), (a, b, z), (0, b, c), (a, 0, c), (a+b-min(a+b,y), min(a+b,y), c), (a+b-min(a+b,x), min(a+b,x), c), (min(a+b,x), a+b-min(a+b,y), c), (0, a+b, c), (a, b+c-min(b+c,z), min(b+c,z)), (a, b+c-min(b+c,y), min(b+c,y)), (a, min(b+c,x), b+c-min(b+c,x)), (a, 0, b+c), (a+c-min(a+c,z), b, min(a+c,z)), (a+c-min(a+c,y), b, min(a+c,y)), (min(a+c,x), b, a+c-min(a+c,x)), (0, b, a+c)]
+class Node:
+    def __init__(self, state, path_cost, heuristic_cost):
+        self.state = state
+        self.path_cost = path_cost
+        self.heuristic_cost = heuristic_cost
 
-# Define the heuristic function
-def heuristic(state, z):
-    (x, y, w) = state
-    return abs(x-z) + abs(y-z) + abs(w-z)
+    def __lt__(self, other):
+        return (self.path_cost + self.heuristic_cost) < (other.path_cost + other.heuristic_cost)
 
-# Define the A* algorithm
-def water_jug(x, y, z):
-    q = PriorityQueue()
-    q.put((0, (0, 0, x), []))
+def a_star_search(capacities, target):
+    def is_goal(state):
+        return state[-1] == target
+
+    def successors(state):
+        successors = []
+        for i in range(len(state)):
+            for j in range(len(state)):
+                if i != j:
+                    # pour as much water as possible from i to j
+                    amount = min(state[i], capacities[j] - state[j])
+                    if amount > 0:
+                        successor_state = state.copy()
+                        successor_state[i] -= amount
+                        successor_state[j] += amount
+                        successors.append((successor_state, amount))
+        return successors
+
+    def heuristic(state):
+        return abs(state[-1] - target)
+
+    initial_node = Node([0] * len(capacities), 0, heuristic([0] * len(capacities)))
+    fringe = [(initial_node.path_cost + initial_node.heuristic_cost, initial_node)]
     visited = set()
-    while not q.empty():
-        (cost, state, path) = q.get()
-        if state in visited:
+
+    while fringe:
+        _, current_node = heapq.heappop(fringe)
+        current_state = current_node.state
+        if is_goal(current_state):
+            return current_node.path_cost
+        if current_state in visited:
             continue
-        visited.add(state)
-        if state[0] == z:
-            return len(path)
-        for succ in successors(x, y, z, state):
-            new_cost = cost + 1
-            new_path = path + [state]
-            q.put((new_cost + heuristic(succ, z), succ, new_path))
-    return None
+        visited.add(tuple(current_state))
+        for successor_state, step_cost in successors(current_state):
+            new_node = Node(successor_state, current_node.path_cost + step_cost, heuristic(successor_state))
+            heapq.heappush(fringe, (new_node.path_cost + new_node.heuristic_cost, new_node))
 
-# Example 1
-x = 4
-y = 3
-z = 2
-result = water_jug(x, y, z)
-if result is None:
-    print(f"No solution found for jugs {x}, {y}, {z}")
-else:
-    print(f"Solution found in {result} steps for jugs {x}, {y}, {z}")
+    return -1
 
-# Example 2
-x = 5
-y = 8
-z = 3
-result = water_jug(x, y, z)
-if result is None:
-    print(f"No solution found for jugs {x}, {y}, {z}")
-else:
-    print(f"Solution found in {result} steps for jugs {x}, {y}, {z}")
+def main():
+    with open('input.txt') as f:
+        capacities = list(map(int, f.readline().strip().split(',')))
+        target = int(f.readline().strip())
+    print(a_star_search(capacities, target))
 
-# Example 3
-x = 6
-y = 9
-z = 2
-result = water_jug(x, y, z)
-if result is None:
-    print(f"No solution found for jugs {x}, {y}, {z}")
-else:
-    print(f"Solution found in {result} steps for jugs {x}, {y}, {z}")
+if __name__ == '__main__':
+    main()
