@@ -1,0 +1,96 @@
+import sys
+
+
+def parse_input_file(file_path):
+    with open(file_path) as f:
+        lines = f.readlines()
+        
+    # Parse landscape
+    landscape = []
+    for line in lines[1:]:
+        if line.startswith('# Tiles:'):
+            break
+        row = [int(x) if x != ' ' else None for x in line.strip().split()]
+        landscape.append(row)
+    
+    # Parse tiles
+    tile_defs = {}
+    for line in lines:
+        if line.startswith('# Tiles:'):
+            for tile_line in lines[lines.index(line)+1:]:
+                if not tile_line.strip():
+                    break
+                id_, _, name = tile_line.strip().split()
+                tile_defs[int(id_)] = name
+    
+    # Parse targets
+    targets = [int(x) for x in lines[-4:]]
+    
+    return landscape, tile_defs, targets
+
+
+def solve(landscape, tile_defs, targets):
+    n_rows, n_cols = len(landscape), len(landscape[0])
+    tiles = [[None] * n_cols for _ in range(n_rows)]
+    used_tiles = set()
+    num_tiles = len(tile_defs)
+    
+    def is_valid_placement(tile_id, row, col):
+        # Check if tile is out of bounds
+        if row < 0 or col < 0 or row >= n_rows or col >= n_cols:
+            return False
+        
+        # Check if tile overlaps with another tile
+        for r in range(5):
+            for c in range(5):
+                if landscape[row+r][col+c] is not None and tiles[row+r][col+c] is not None:
+                    return False
+        
+        # Check if tile is placed next to an existing tile
+        if row > 0 and tiles[row-1][col] == tile_id:
+            return True
+        if col > 0 and tiles[row][col-1] == tile_id:
+            return True
+        if row < n_rows-5 and tiles[row+5][col] == tile_id:
+            return True
+        if col < n_cols-5 and tiles[row][col+5] == tile_id:
+            return True
+        
+        # Check if tile is placed next to the outer boundary
+        if row == 0 or col == 0 or row == n_rows-5 or col == n_cols-5:
+            for r in range(max(0, row-1), min(n_rows-4, row+6)):
+                for c in range(max(0, col-1), min(n_cols-4, col+6)):
+                    if landscape[r][c] is None:
+                        return True
+        
+        return False
+    
+    def solve_helper(row, col):
+        if row == n_rows:
+            return True
+        
+        next_col = col + 5
+        next_row = row
+        if next_col == n_cols:
+            next_col = 0
+            next_row += 5
+        
+        if tiles[row][col] is not None:
+            return solve_helper(next_row, next_col)
+        
+        for tile_id in range(num_tiles):
+            if tile_id not in used_tiles and is_valid_placement(tile_id, row, col):
+                tiles[row][col] = tile_id
+                used_tiles.add(tile_id)
+                
+                if solve_helper(next_row, next_col):
+                    return True
+                
+                tiles[row][col] = None
+                used_tiles.remove(tile_id)
+        
+        return False
+    
+    solve_helper(0, 0)
+    
+    # Convert tile IDs to names and write solution to output
