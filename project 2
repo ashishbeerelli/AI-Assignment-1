@@ -1,96 +1,119 @@
 import sys
+import os
+import copy
+import networkx as nx
+import matplotlib.pyplot as plt
+# First we need to open the file and read the data and then create 2 variables neighbours and variables 
+with open("input.txt", "r") as f:
+    info = f.readlines()
+neighbours = {}
+variables = {}
+# Open the file and read the data
+with open("input.txt", "r") as f:
+    data = f.readlines()
+# Create the variables
+neighbours = {}
+variables = {}
+
+# Process each line of data
+for line in data:
+    if line.startswith('#') or line.strip() == "":
+        continue
+    elif line.startswith('c'):
+        colors = int(''.join(filter(str.isdigit, line)))
+        continue
+    node1, node2 = map(int, line.strip().split(","))
+    # Updating the neighbours
+    if node1 not in neighbours:
+        neighbours[node1] = []
+    neighbours[node1].append(node2)
+    if node2 not in neighbours:
+        neighbours[node2] = []
+    neighbours[node2].append(node1)
+    # Updating the variables
+    if node1 not in variables:
+        variables[node1] = [None, list(range(1, colors+1))]
+    if node2 not in variables:
+        variables[node2] = [None, list(range(1, colors+1))]
+        
+G = nx.Graph()
+for node, neighbours_list in neighbours.items():
+    G.add_node(node)
+    for neighbour in neighbours_list:
+        G.add_edge(node, neighbour)
+
+# Define a class to represent a state
+class color:
+    curr: int
+    assigned: dict
+    variables: dict
+
+    def __init__(self, curr, assigned, variables):
+        self.curr = curr
+        self.assigned = assigned
+        self.variables = variables
+
+    
+    # Create a function to print the variables with their values
+    def printvar(self):
+        for var in self.variables:
+            print(var,"has color", self.variables[var][0])
+
+   
+        
+        colors_map = {1: 'blue', 2: 'yellow', 3: 'red', 4: 'white', 5: 'orange', 6: 'silver'}
+        for node, (color, _) in self.variables.items():
+            if color is not None:
+               G.nodes[node]['color'] = colors_map[color]
+        node_colors = [colors_map[color] for node, (color, _) in self.variables.items() if color is not None]
+        nx.draw(G, with_labels=True, node_color=node_colors)
+        plt.show()
+        
+        
+            
+def intersection(a, b):
+    return list(set(a) & set(b)) if set(a) & set(b) else -1
 
 
-def parse_input_file(file_path):
-    with open(file_path) as f:
-        lines = f.readlines()
-        
-    # Parse landscape
-    landscape = []
-    for line in lines[1:]:
-        if line.startswith('# Tiles:'):
-            break
-        row = [int(x) if x != ' ' else None for x in line.strip().split()]
-        landscape.append(row)
+#backtracking search    
+def backtrack_search(state):
     
-    # Parse tiles
-    tile_defs = {}
-    for line in lines:
-        if line.startswith('# Tiles:'):
-            for tile_line in lines[lines.index(line)+1:]:
-                if not tile_line.strip():
-                    break
-                id_, _, name = tile_line.strip().split()
-                tile_defs[int(id_)] = name
-    
-    # Parse targets
-    targets = [int(x) for x in lines[-4:]]
-    
-    return landscape, tile_defs, targets
+    assigned_neighbours = [n for n in neighbours[state.curr] if n in state.assigned]
 
+    if assigned_neighbours != -1:
+        for domain_val in state.variables[state.curr][1]:
+            is_assignable = all(domain_val != state.variables[assigned_var][0] for assigned_var in assigned_neighbours)
 
-def solve(landscape, tile_defs, targets):
-    n_rows, n_cols = len(landscape), len(landscape[0])
-    tiles = [[None] * n_cols for _ in range(n_rows)]
-    used_tiles = set()
-    num_tiles = len(tile_defs)
+            if is_assignable:
+               state.variables[state.curr][0] = domain_val
+               state.variables[state.curr][1].remove(domain_val)
+               state.assigned.append(state.curr)
+               break
+    else:
+      value_to_assign = state.variables[state.curr][1][0]
+      state.variables[state.curr][0] = value_to_assign
+      state.variables[state.curr][1].remove(value_to_assign)
+      state.assigned.append(state.curr)
     
-    def is_valid_placement(tile_id, row, col):
-        # Check if tile is out of bounds
-        if row < 0 or col < 0 or row >= n_rows or col >= n_cols:
-            return False
-        
-        # Check if tile overlaps with another tile
-        for r in range(5):
-            for c in range(5):
-                if landscape[row+r][col+c] is not None and tiles[row+r][col+c] is not None:
-                    return False
-        
-        # Check if tile is placed next to an existing tile
-        if row > 0 and tiles[row-1][col] == tile_id:
-            return True
-        if col > 0 and tiles[row][col-1] == tile_id:
-            return True
-        if row < n_rows-5 and tiles[row+5][col] == tile_id:
-            return True
-        if col < n_cols-5 and tiles[row][col+5] == tile_id:
-            return True
-        
-        # Check if tile is placed next to the outer boundary
-        if row == 0 or col == 0 or row == n_rows-5 or col == n_cols-5:
-            for r in range(max(0, row-1), min(n_rows-4, row+6)):
-                for c in range(max(0, col-1), min(n_cols-4, col+6)):
-                    if landscape[r][c] is None:
-                        return True
-        
-        return False
-    
-    def solve_helper(row, col):
-        if row == n_rows:
-            return True
-        
-        next_col = col + 5
-        next_row = row
-        if next_col == n_cols:
-            next_col = 0
-            next_row += 5
-        
-        if tiles[row][col] is not None:
-            return solve_helper(next_row, next_col)
-        
-        for tile_id in range(num_tiles):
-            if tile_id not in used_tiles and is_valid_placement(tile_id, row, col):
-                tiles[row][col] = tile_id
-                used_tiles.add(tile_id)
-                
-                if solve_helper(next_row, next_col):
-                    return True
-                
-                tiles[row][col] = None
-                used_tiles.remove(tile_id)
-        
-        return False
-    
-    solve_helper(0, 0)
-    
-    # Convert tile IDs to names and write solution to output
+    if len(state.assigned) == len(neighbours):
+        state.printvar()
+        raise SystemExit("Solution Found")
+    if state.variables[state.curr][0] is None:
+        return
+    else:
+# Minimum Remaining Value - Chooses the variable with the least number of values in its domain
+        not_assigned = {}
+        temp = list(set(neighbours[state.curr]).difference(state.assigned))
+        for var in temp:
+            if var in state.variables:
+                not_assigned[var] = state.variables[var][1]
+# Sorts the neighbours based on their domain lengths
+        sorted_items = sorted(not_assigned.items(), key=lambda x: len(x[1]))
+        not_assigned.clear()
+        not_assigned.update(sorted_items)
+        for var in not_assigned:
+            backtrack_search(color(copy.deepcopy(var),copy.deepcopy(state.assigned),copy.deepcopy(state.variables)))     
+
+curr_state = color(2,[],copy.deepcopy(variables))
+#calling backtracking function
+backtrack_search(curr_state)
